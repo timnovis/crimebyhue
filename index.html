@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
+<head>
+	<meta charset="UTF-8">
+	<title>UK Crime Rate by Hue</title>
+	<style>
+	* {
+		-webkit-box-sizing: border-box;
+		-moz-box-sizing: border-box;
+		box-sizing: border-box;
+	}
+	body {
+		margin: 0;
+		font-size: 12px;
+	}
+	a {
+		word-wrap: break-word;
+		color: inherit;
+	}
+	#canvas {
+		position: fixed;
+		width: 100%;
+		height: 100%;
+		padding: 30px;
+		background-color: #333;
+		color: #FFF;
+		font-family: sans-serif;
+		-webkit-transition: .3s ease background-color;
+		-o-transition: .3s ease background-color;
+		transition: .3s ease background-color;
+	}
+	#canvas.loaded {
+		color: #333;
+	}
+	.is-loading, .api-error, .connection-error, .wtf-no-geo {
+		display: none;
+	}
+	.loading .is-loading {
+		display: block;
+		font-weight: bold;
+	}
+	.no-geo .wtf-no-geo {
+		display: block;
+	}
+	.has-api-error .api-error {
+		display: block;
+	}
+	.has-connection-error .connection-error {
+		display: block;
+	}
+	.disclaimer {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 30px;
+		padding: 30px;
+	}
+	</style>
+</head>
+<body>
+	<div id="canvas">
+		<div class="is-loading">
+			<h1>UK Crime rate by hue</h1>
+			<p>Loading...</p>
+		</div>
+		<div class="api-error">
+			<h2>There was an error :(</h2>
+			<p>The API probably returned too many results and so basically exploded.</p>
+		</div>
+		<div class="connection-error">
+			<h2>Damn it!</h2>
+			<p>Your internet connection was probably interrupted. Refresh and try again.</p>
+		</div>
+		<div class="wtf-no-geo">
+			<h2>Your browser is pretty old...</h2>
+			<p><a title="Upgrade your browser to use the Geolocation feature" href="http://outdatedbrowser.com/">Upgrade your browser today!</a></p>
+		</div>
+		<section class="disclaimer">
+			<h2>Disclaimer</h2>
+			<p>I am not in any way implying that the colour of this page is an indicator of safety or crime in your area, it is purely an experiment and coding exercise.</p>
+			<p>Data API provided by <a title="Link to Police Data API" href="https://data.police.uk/docs/method/crime-street/">https://data.police.uk/docs/method/crime-street/</a></p>
+			<p><a title="Link to Tim Novis on Twitter" href="https://twitter.com/timnovis">Tim Novis</a></p>
+		</section>
+	</div>
+	<script>
+	/*
+	Hello to you reading my code!
+	*/
+
+	/*
+	Just defining the play area. Adding a 'loading' class to the div.
+	*/
+	var canvas = document.getElementById('canvas');
+	canvas.classList.add('loading');
+
+	/*
+	So what this function does is: Takes the amount of objects in an array, in this case, crimes. It then does some weird maths magic to use the amount of objects and derive an RGB colour value from it. It then chucks these values in to an array for me to use
+	*/
+	var rgbFromArray = function(array,divider) {
+		var multiplier = array.length / parseInt(divider);
+		var rgb = [];
+		var r = Math.round((255 * multiplier));
+		var g = Math.round((255 * ( 100 - multiplier)) / 100);
+		var b = Math.round(0);
+		/* Push values in to array */
+		rgb.push(r,g,b);
+		/* Returns array, usage: var myValsArray = rgbFromArray(somearray,10); */
+		return rgb;
+	}
+
+	/*
+	The magic. This is the getSearches function which calls the Police Data API, accepts two arguments: latitude and longitude.
+	*/
+	var getSearches = function(lat,lng) {
+		/*
+		The API Endpoint, documentation here: https://data.police.uk/docs/method/crime-street/
+		*/
+		var apiUrl = 'https://data.police.uk/api/crimes-street/all-crime?lat='+lat+'&lng='+lng+'';
+		/* Fire up an XMLHttpRequest (AJAX) */
+		var apiRequest = new XMLHttpRequest();
+		apiRequest.open('GET', apiUrl, true);
+
+		/* onload  */
+		apiRequest.onload = function() {
+			/* If the API comes back with an 'OK' status code */
+			if (apiRequest.status >= 200 && apiRequest.status < 400) {
+				/* Grab the response data (the crimes) */
+				var data = JSON.parse(apiRequest.responseText);
+				/* Call our rgbFromArray function defined above, set the division variable to 10 */
+				var rgbValues = rgbFromArray(data, 7);
+				
+				/* Removing the loading class, and then setting the background colour from the RGB Values array defined above */
+				canvas.classList.remove('loading');
+				canvas.classList.add('loaded');
+				canvas.style.backgroundColor = 'rgb(' + rgbValues[0] + ',' + rgbValues[1] + ',' + rgbValues[2] + ')';
+
+			} else {
+				/* If there's an API error, do this stuff */
+				var data = JSON.parse('{"data":"API error"}');
+				canvas.classList.remove('loading');
+				canvas.classList.add('has-api-error');
+			}
+		};
+
+		apiRequest.onerror = function() {
+			/* If there's some connection error, do this stuff */
+			var data = JSON.parse('{"data":"internet error"}');
+			canvas.classList.remove('loading');
+			canvas.classList.add('has-connection-error');
+		};
+
+		/* Fire off the API request */
+		apiRequest.send();
+
+	}
+
+	/* Checks if browser supports Geolocation */
+	if ("geolocation" in navigator) {
+		/* Calls upon the browser geolocation feature to constantly monitor location coordinates (latitute and longitude) */
+		var geowatch = navigator.geolocation.watchPosition(function(position) {
+			/*
+			Calls the getSearches function defined above, with the two arguments of lat and lng returned by the geolocation API.
+			Yet to test, but hoping that as you move and location changes, the background changes colour.
+			Need to take this on a test drive.
+			*/
+			getSearches(position.coords.latitude, position.coords.longitude);
+		});
+		geowatch;
+	} else {
+		canvas.classList.remove('loading');
+		canvas.classList.add('no-geo');
+	}
+	</script>
+</body>
+</html>
